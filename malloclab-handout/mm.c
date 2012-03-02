@@ -43,6 +43,8 @@ team_t team = {
 
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+static char *heap_listp = 0;	//points to the prologue block or first block
+static char *bp = 0;
 
 ///////////////////////////////////////////////////////////////
 /* Basic constants and macros */
@@ -74,12 +76,17 @@ team_t team = {
 
 /* 
  * mm_init - initialize the malloc package.
+ * mm init: Before calling mm malloc mm realloc or mm free, the application program (i.e.,
+ * the trace-driven driver program that you will use to evaluate your implementation) calls mm init to
+ * perform any necessary initializations, such as allocating the initial heap area. The return value should
+ * be -1 if there was a problem in performing the initialization, 0 otherwise.
  */
 int mm_init(void)
 {
+	//char *bp;
 	/* Create the initial empty heap */
 	if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
-	return -1;
+		return -1;
 	PUT(heap_listp, 0); /* Alignment padding */
 	PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */
 	PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */
@@ -89,11 +96,11 @@ int mm_init(void)
 	/* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return -1;
-    return 0;
+    	return 0;
 }
 
 ////////////////////////////////////////////////////////////////
- static void *extend_heap(size_t words)
+ void *extend_heap(size_t words)
  {
 	char *bp;
 	size_t size;
@@ -170,7 +177,7 @@ void mm_free(void *ptr)
 	coalesce(bp);
 }
 ////////////////////////////////////////////////////////////////
-static void *coalesce(void *bp)
+ void *coalesce(void *bp)
  {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
