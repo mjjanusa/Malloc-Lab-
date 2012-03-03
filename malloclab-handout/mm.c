@@ -36,15 +36,15 @@ team_t team = {
 };
 
 /* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
+//#define ALIGNMENT 8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+//#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
 
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+//#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 static char *heap_listp = 0;	//points to the prologue block or first block
-static char *bp = 0;
+static char *bp;
 
 ///////////////////////////////////////////////////////////////
 /* Basic constants and macros */
@@ -100,7 +100,7 @@ int mm_init(void)
 }
 
 ////////////////////////////////////////////////////////////////
- void *extend_heap(size_t words)
+ static void *extend_heap(size_t words)
  {
 	char *bp;
 	size_t size;
@@ -166,7 +166,7 @@ void *mm_malloc(size_t size)
 }
 ////////////////////////////////////////////////////////////////////
 
- void *find_fit(size_t asize)
+ static void *find_fit(size_t asize)
  {
  	/* First fit search */
  	void *bp;
@@ -179,7 +179,7 @@ void *mm_malloc(size_t size)
  	return NULL; /* No fit */
  }
 
- void place(void *bp, size_t asize)
+ static void place(void *bp, size_t asize)
  {
  	size_t csize = GET_SIZE(HDRP(bp));
 
@@ -202,7 +202,8 @@ void *mm_malloc(size_t size)
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr)
+//void mm_free(void *ptr)
+void mm_free(void *bp)
 {
 	size_t size = GET_SIZE(HDRP(bp));
 
@@ -211,7 +212,7 @@ void mm_free(void *ptr)
 	coalesce(bp);
 }
 ////////////////////////////////////////////////////////////////
- void *coalesce(void *bp)
+ static void *coalesce(void *bp)
  {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
@@ -251,7 +252,7 @@ void *mm_realloc(void *ptr, size_t size)
 {
     void *oldptr = ptr;
     void *newptr;
-    size_t copySize;
+    /*size_t copySize;
     
     newptr = mm_malloc(size);
     if (newptr == NULL)	
@@ -266,6 +267,6 @@ void *mm_realloc(void *ptr, size_t size)
     if (size < copySize)
       copySize = size;
     memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
+    mm_free(oldptr);*/
     return newptr;
 }
