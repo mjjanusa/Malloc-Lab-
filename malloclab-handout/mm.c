@@ -36,13 +36,13 @@ team_t team = {
 };
 
 /* single word (4) or double word (8) alignment */
-//#define ALIGNMENT 8
+#define ALIGNMENT 8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
-//#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
 
-//#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 static char *heap_listp = 0;	//points to the prologue block or first block
 static char *bp;
 
@@ -252,7 +252,7 @@ void *mm_realloc(void *ptr, size_t size)
 {
     void *oldptr = ptr;
     void *newptr;
-    /*size_t copySize;
+    size_t copySize;
     
     newptr = mm_malloc(size);
     if (newptr == NULL)	
@@ -263,10 +263,11 @@ void *mm_realloc(void *ptr, size_t size)
 	mm_free(ptr);
     	newptr = 0;
     }
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    copySize = GET_SIZE(HDRP(ptr));
+    //copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
     if (size < copySize)
       copySize = size;
     memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);*/
+    mm_free(oldptr);
     return newptr;
 }
