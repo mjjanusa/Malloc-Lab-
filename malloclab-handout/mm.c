@@ -125,14 +125,14 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
+   /* int newsize = ALIGN(size + SIZE_T_SIZE);
     void *p = mem_sbrk(newsize);
     if (p == (void *)-1)
 		return NULL;
     else {
         *(size_t *)p = size;
         return (void *)((char *)p + SIZE_T_SIZE);
-    }
+    }*/
 	
 	////////////////////////////////////////////////////////////
 	size_t asize; /* Adjusted block size */
@@ -164,6 +164,40 @@ void *mm_malloc(size_t size)
 
 	////////////////////////////////////////////////////////////
 }
+////////////////////////////////////////////////////////////////////
+
+ void *find_fit(size_t asize)
+ {
+ 	/* First fit search */
+ 	void *bp;
+
+ 	for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+ 		if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+ 		return bp;
+ 		}
+ 	}
+ 	return NULL; /* No fit */
+ }
+
+ void place(void *bp, size_t asize)
+ {
+ 	size_t csize = GET_SIZE(HDRP(bp));
+
+ 	if ((csize - asize) >= (2*DSIZE)) {
+ 		PUT(HDRP(bp), PACK(asize, 1));
+ 		PUT(FTRP(bp), PACK(asize, 1));
+ 		bp = NEXT_BLKP(bp);
+ 		PUT(HDRP(bp), PACK(csize-asize, 0));
+ 		PUT(FTRP(bp), PACK(csize-asize, 0));
+ 	}
+ 	else {
+ 		PUT(HDRP(bp), PACK(csize, 1));
+ 		PUT(FTRP(bp), PACK(csize, 1));
+ 	}
+ }
+
+////////////////////////////////////////////////////////////////////
+
 
 /*
  * mm_free - Freeing a block does nothing.
@@ -220,8 +254,14 @@ void *mm_realloc(void *ptr, size_t size)
     size_t copySize;
     
     newptr = mm_malloc(size);
-    if (newptr == NULL)
+    if (newptr == NULL)	
       return NULL;
+    if (oldptr == NULL)	//if ptr is NULL, the call is equivalent to mm malloc(size)
+	return newptr;
+    if (size == 0){	//if size is equal to zero, the call is equivalent to mm free(ptr)
+	mm_free(ptr);
+    	newptr = 0;
+    }
     copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
     if (size < copySize)
       copySize = size;
