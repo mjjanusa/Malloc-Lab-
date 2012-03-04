@@ -44,7 +44,6 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 static char *heap_listp = 0;	//points to the prologue block or first block
-static char *bp;
 
 ///////////////////////////////////////////////////////////////
 /* Basic constants and macros */

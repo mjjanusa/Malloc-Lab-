@@ -137,6 +137,7 @@ void *mm_malloc(size_t size)
 	size_t asize; /* Adjusted block size */
 	size_t extendsize; /* Amount to extend heap if no fit */
 	char *bp;
+	prinftf("MALLOC %d", size);
 
 	/* Ignore spurious requests */
 	if (size == 0)
