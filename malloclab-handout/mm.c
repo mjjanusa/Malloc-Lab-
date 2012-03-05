@@ -43,8 +43,15 @@ team_t team = {
 
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
-static char *heap_listp = 0;	//points to the prologue block or first block
-static char *bp;
+static char *heap_listp = NULL;	//points to the prologue block or first block
+static char * heap_end = NULL;	//points to the end of the heap list
+//static char *bp;
+
+static void *extend_heap(size_t words);
+static void *coalesce(void *bp);
+static void *find_fit(size_t asize);
+static void place(void *bp, size_t asize);
+static int mm_check(void);
 
 ///////////////////////////////////////////////////////////////
 /* Basic constants and macros */
@@ -87,6 +94,8 @@ int mm_init(void)
 	/* Create the initial empty heap */
 	if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
 		return -1;
+
+	heap_end = mem_heap_hi();
 	PUT(heap_listp, 0); /* Alignment padding */
 	PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */
 	PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */
@@ -107,6 +116,7 @@ int mm_init(void)
 
 	/* Allocate an even number of words to maintain alignment */
 	size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
+	//size = PREV_BLKP(heap_end + 1);
 	if ((long)(bp = mem_sbrk(size)) == -1)
 		return NULL;
 
@@ -125,16 +135,8 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-   /* int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-		return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
-    }*/
+	//mm_check();	//run heap checker
 	
-	////////////////////////////////////////////////////////////
 	size_t asize; /* Adjusted block size */
 	size_t extendsize; /* Amount to extend heap if no fit */
 	char *bp;
@@ -161,9 +163,8 @@ void *mm_malloc(size_t size)
 		return NULL;
 	place(bp, asize);
 	return bp;
-
-	////////////////////////////////////////////////////////////
 }
+
 ////////////////////////////////////////////////////////////////////
 
  static void *find_fit(size_t asize)
@@ -179,6 +180,7 @@ void *mm_malloc(size_t size)
  	return NULL; /* No fit */
  }
 
+//////////////////////
  static void place(void *bp, size_t asize)
  {
  	size_t csize = GET_SIZE(HDRP(bp));
@@ -194,6 +196,36 @@ void *mm_malloc(size_t size)
  		PUT(HDRP(bp), PACK(csize, 1));
  		PUT(FTRP(bp), PACK(csize, 1));
  	}
+ }
+///////////////////////
+
+ static int mm_check(void)
+ {
+	char *tempPtr;
+	size_t* topHeap =  mem_heap_lo();	//Get top of heap from mdriver.c
+    	size_t* bottomHeap =  mem_heap_hi();	//And get footer of heap
+
+  	//While there is a next pointer, go through the heap
+	for(tempPtr = topHeap; GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
+        	
+        	if (tempPtr > bottomHeap || tempPtr < topHeap){	//If pointer is beyond bounds print error
+            		printf("Error: pointer %p out of heap bounds\n", tempPtr);
+		}
+
+		//if the size and allocated fields read from address p are "0" print error (contiguous free block issue)
+        	if (GET_ALLOC(tempPtr) == 0 && GET_ALLOC(NEXT_BLKP(tempPtr))==0){
+            		printf("Error: Empty stacked blocks %p and %p not coalesced\n", tempPtr, NEXT_BLKP(tempPtr));
+		}
+
+		if (GET(HDRP(tempPtr)) != GET(FTRP(tempPtr))){
+        		printf("Error, %p head and bottom of block not consistent\n", tempPtr);
+    		}
+		if ((size_t)tempPtr%8){
+        		printf("Error, %p misaligned our headers and payload\n", tempPtr);
+    		}
+	}
+	return 0;
+
  }
 
 ////////////////////////////////////////////////////////////////////
@@ -245,6 +277,7 @@ void mm_free(void *bp)
 	return bp;
  }
 ////////////////////////////////////////////////////////////////
+
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
@@ -263,6 +296,8 @@ void *mm_realloc(void *ptr, size_t size)
 	mm_free(ptr);
     	newptr = 0;
     }
+
+
     copySize = GET_SIZE(HDRP(ptr));
     //copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
     if (size < copySize)
@@ -270,4 +305,8 @@ void *mm_realloc(void *ptr, size_t size)
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
     return newptr;
+
+
+
+
 }
