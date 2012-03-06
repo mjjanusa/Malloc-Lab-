@@ -45,6 +45,14 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 static char *heap_listp = 0;	//points to the prologue block or first block
 
+static void *extend_heap(size_t words);
+static void *coalesce(void *bp);
+static void add_free_list(void *bp);
+static void remove_free_list(void *bp);
+static void *find_fit(size_t asize);
+static void place(void *bp, size_t asize);
+static int mm_check(void);
+
 ///////////////////////////////////////////////////////////////
 /* Basic constants and macros */
  #define WSIZE 4 /* Word and header/footer size (bytes) */
@@ -82,7 +90,6 @@ static char *heap_listp = 0;	//points to the prologue block or first block
  */
 int mm_init(void)
 {
-	//char *bp;
 	/* Create the initial empty heap */
 	if ((heap_listp = mem_sbrk(88*WSIZE)) == (void *)-1)
 		return -1;
@@ -137,15 +144,6 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-   /* int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-		return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
-    }*/
-
 	////////////////////////////////////////////////////////////
 	size_t asize; /* Adjusted block size */
 	size_t extendsize; /* Amount to extend heap if no fit */
@@ -156,11 +154,12 @@ void *mm_malloc(size_t size)
 		return NULL;
 
 	/* Adjust block size to include overhead and alignment reqs. */
-	if (size <= DSIZE)
+	if (size <= DSIZE){
 		asize = 2*DSIZE;
-	else
+	}
+	else{
 		asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
-
+	}
 	/* Search the free list for a fit */
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
@@ -297,7 +296,6 @@ void mm_free(void *bp)
 	if (prev_alloc && next_alloc) { /* Case 1 */
 		return bp;
 	}
-
 	else if (prev_alloc && !next_alloc) { /* Case 2 */
 
  		//REMOVE BP FROM FREE LIST
@@ -311,12 +309,8 @@ void mm_free(void *bp)
 
 		//ADD BP TO THE FREE LIST
 		add_free_list(bp);
-
-
 	}
-
 	else if (!prev_alloc && next_alloc) { /* Case 3 */
-
 
 		//REMOVE BP FROM FREE LIST
  		remove_free_list(bp);
@@ -330,11 +324,9 @@ void mm_free(void *bp)
 
 		//ADD TO THE FREE LIST
 		add_free_list(bp);
-
 	}
 
-	else { /* Case 4 */
-		
+	else { /* Case 4 */		
 		//REMOVE BP FROM FREE LIST
  		remove_free_list(bp);
  		//REMOVE PREV FROM FREE LIST
@@ -349,8 +341,7 @@ void mm_free(void *bp)
 		bp = PREV_BLKP(bp);
 		
 		//ADD TO THE FREE LIST
-		add_free_list(bp);
-		
+		add_free_list(bp);		
 	}
 	return bp;
  }
@@ -381,3 +372,34 @@ void *mm_realloc(void *ptr, size_t size)
     mm_free(oldptr);
     return newptr;
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+ static int mm_check(void)
+ {
+	char *tempPtr;
+	size_t* topHeap =  mem_heap_lo();	//Get top of heap from mdriver.c
+    	size_t* bottomHeap =  mem_heap_hi();	//And get footer of heap
+
+  	//While there is a next pointer, go through the heap
+	for(tempPtr = topHeap; GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
+        	
+        	if (tempPtr > bottomHeap || tempPtr < topHeap){	//If pointer is beyond bounds print error
+            		printf("Error: pointer %p out of heap bounds\n", tempPtr);
+		}
+
+		//if the size and allocated fields read from address p are "0" print error (contiguous free block issue)
+        	if (GET_ALLOC(tempPtr) == 0 && GET_ALLOC(NEXT_BLKP(tempPtr))==0){
+            		printf("Error: Empty stacked blocks %p and %p not coalesced\n", tempPtr, NEXT_BLKP(tempPtr));
+		}
+
+		if (GET(HDRP(tempPtr)) != GET(FTRP(tempPtr))){
+        		printf("Error, %p head and bottom of block not consistent\n", tempPtr);
+    		}
+		if ((size_t)tempPtr%8){
+        		printf("Error, %p misaligned our headers and payload\n", tempPtr);
+    		}
+	}
+	return 0;
+
+ }
+//////////////////////////////////////////////////////////////////////////////////////////////
