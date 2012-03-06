@@ -43,8 +43,9 @@ team_t team = {
 
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
-static char *heap_listp = 0;	//points to the prologue block or first block
+////////////////Function Declaration////////////////////////////
 
+static char *heap_listp = NULL;	//points to the prologue block or first block
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void add_free_list(void *bp);
@@ -81,6 +82,8 @@ static int mm_check(void);
  #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 ///////////////////////////////////////////////////////////////
 
+#define GET_BP(p) (void *)(((char *)(p)) + SIZE_T_SIZE)
+
 /* 
  * mm_init - initialize the malloc package.
  * mm init: Before calling mm malloc mm realloc or mm free, the application program (i.e.,
@@ -95,7 +98,6 @@ int mm_init(void)
 		return -1;
 	
 	PUT(heap_listp, 0); /* Alignment padding */
-
 	PUT(heap_listp + (1*WSIZE), PACK(43*DSIZE, 1)); /* Prologue header */
 	
 	int i;
@@ -111,6 +113,10 @@ int mm_init(void)
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return -1;
 
+//	if (!mm_check()) {
+//        	printf("Init failed\n");
+//        	return -1;
+//	}
     	return 0; 
 }
 
@@ -144,7 +150,7 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-	////////////////////////////////////////////////////////////
+	//mm_check();
 	size_t asize; /* Adjusted block size */
 	size_t extendsize; /* Amount to extend heap if no fit */
 	char *bp;
@@ -173,7 +179,6 @@ void *mm_malloc(size_t size)
 	place(bp, asize);
 	return bp;
 
-	////////////////////////////////////////////////////////////
 }
 ////////////////////////////////////////////////////////////////////
 
@@ -351,6 +356,7 @@ void mm_free(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
+    //mm_check();	
     void *oldptr = ptr;
     void *newptr;
     size_t copySize;
@@ -374,26 +380,37 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
+/*
+ *  Your heap checker will consist of the function int mm check(void) in mm.c. It will check any invariants
+ *  or consistency conditions you consider prudent. It returns a nonzero value if and only if your heap is
+ *  consistent. You are not limited to the listed suggestions nor are you required to check all of them. You are
+ *  encouraged to print out error messages when mm check fails. 
+ */
  static int mm_check(void)
  {
-	char *tempPtr;
+	//char *tempPtr;
+	void* tempPtr;
 	size_t* topHeap =  mem_heap_lo();	//Get top of heap from mdriver.c
     	size_t* bottomHeap =  mem_heap_hi();	//And get footer of heap
 
   	//While there is a next pointer, go through the heap
 	for(tempPtr = topHeap; GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
+	//for(tempPtr = GET_BP(heap_listp); GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
         	
-        	if (tempPtr > bottomHeap || tempPtr < topHeap){	//If pointer is beyond bounds print error
+		//If pointer is beyond bounds print error
+        	if (tempPtr > bottomHeap || tempPtr < topHeap){	
             		printf("Error: pointer %p out of heap bounds\n", tempPtr);
 		}
 
-		//if the size and allocated fields read from address p are "0" print error (contiguous free block issue)
+		//if the size and allocated fields read from address p are "0" print error 
+		//(contiguous free block issue)
         	if (GET_ALLOC(tempPtr) == 0 && GET_ALLOC(NEXT_BLKP(tempPtr))==0){
             		printf("Error: Empty stacked blocks %p and %p not coalesced\n", tempPtr, NEXT_BLKP(tempPtr));
 		}
-
+		/* header/footer consistency */
 		if (GET(HDRP(tempPtr)) != GET(FTRP(tempPtr))){
-        		printf("Error, %p head and bottom of block not consistent\n", tempPtr);
+        		//printf("Error, %p head and bottom of block not consistent\n", tempPtr);
+			printf("Block %x: Header %d, Footer %d\n", (size_t)tempPtr, GET(HDRP(tempPtr)), GET(FTRP(tempPtr)));
     		}
 		if ((size_t)tempPtr%8){
         		printf("Error, %p misaligned our headers and payload\n", tempPtr);
@@ -401,5 +418,24 @@ void *mm_realloc(void *ptr, size_t size)
 	}
 	return 0;
 
+/*
+    void* current;
+    void* previous;
+    int i;
+    int safety_counter = 0;
+ 
+    // header/footer consistency 
+    current = GET_BP(heap_listp);
+    do {
+        if (GET(HDRP(current)) != GET(FTRP(current))) {
+            printf("Header/footer mismatch:\n");
+            printf("Block %x: Header %d, Footer %d\n", (size_t)current, GET(HDRP(current)), GET(FTRP(current)));
+            return 0;
+        }
+        current = NEXT_BLKP(current);
+    } while (GET_SIZE(HDRP(current)) > 0);
+
+ 
+    return 1;*/
  }
 //////////////////////////////////////////////////////////////////////////////////////////////
