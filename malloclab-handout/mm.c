@@ -8,6 +8,7 @@
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
+ * PROGRESS!
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +46,9 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 ////////////////Function Declaration////////////////////////////
 
-static char *heap_listp = NULL;	//points to the prologue block or first block
+static char *heap_listp = NULL;		//points to the prologue block or first block
+int global_minlist = 0;  			//GLOBAL FIRST LIST WITH FREE BLOCKS.
+int free_count = 0;
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void add_free_list(void *bp);
@@ -82,8 +85,6 @@ static int mm_check(void);
  #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 ///////////////////////////////////////////////////////////////
 
-#define GET_BP(p) (void *)(((char *)(p)) + SIZE_T_SIZE)
-
 /* 
  * mm_init - initialize the malloc package.
  * mm init: Before calling mm malloc mm realloc or mm free, the application program (i.e.,
@@ -93,13 +94,15 @@ static int mm_check(void);
  */
 int mm_init(void)
 {
+	//char *bp;
 	/* Create the initial empty heap */
 	if ((heap_listp = mem_sbrk(88*WSIZE)) == (void *)-1)
 		return -1;
-	
+
 	PUT(heap_listp, 0); /* Alignment padding */
+
 	PUT(heap_listp + (1*WSIZE), PACK(43*DSIZE, 1)); /* Prologue header */
-	
+
 	int i;
 	for(i = 2; i < 86; i++) {
 		PUT(heap_listp + (i*WSIZE), 0); /* initialize free pointers (one for every increment of 50 bytes*/
@@ -108,15 +111,13 @@ int mm_init(void)
 	PUT(heap_listp + (86*WSIZE), PACK(43*DSIZE, 1)); /* Prologue footer */
 	PUT(heap_listp + (87*WSIZE), PACK(0, 1)); /* Epilogue header */
 	heap_listp += (2*WSIZE);
+	global_minlist = 100;
+	free_count = 0;
 
 	/* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return -1;
 
-//	if (!mm_check()) {
-//        	printf("Init failed\n");
-//        	return -1;
-//	}
     	return 0; 
 }
 
@@ -137,8 +138,6 @@ int mm_init(void)
 	PUT(FTRP(bp), PACK(size, 0)); /* Free block footer */
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */
 
-	add_free_list(bp);
-
 	/* Coalesce if the previous block was free */
 	return coalesce(bp);
 	//return bp;
@@ -150,7 +149,16 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-	//mm_check();
+   /* int newsize = ALIGN(size + SIZE_T_SIZE);
+    void *p = mem_sbrk(newsize);
+    if (p == (void *)-1)
+		return NULL;
+    else {
+        *(size_t *)p = size;
+        return (void *)((char *)p + SIZE_T_SIZE);
+    }*/
+
+	////////////////////////////////////////////////////////////
 	size_t asize; /* Adjusted block size */
 	size_t extendsize; /* Amount to extend heap if no fit */
 	char *bp;
@@ -160,12 +168,11 @@ void *mm_malloc(size_t size)
 		return NULL;
 
 	/* Adjust block size to include overhead and alignment reqs. */
-	if (size <= DSIZE){
+	if (size <= DSIZE)
 		asize = 2*DSIZE;
-	}
-	else{
+	else
 		asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
-	}
+
 	/* Search the free list for a fit */
 	if ((bp = find_fit(asize)) != NULL) {
 		place(bp, asize);
@@ -179,6 +186,7 @@ void *mm_malloc(size_t size)
 	place(bp, asize);
 	return bp;
 
+	////////////////////////////////////////////////////////////
 }
 ////////////////////////////////////////////////////////////////////
 
@@ -187,14 +195,21 @@ void *mm_malloc(size_t size)
  	/* First fit search */
  	void *bp;
  	
+ 	if(free_count == 0)
+ 		return NULL;
+ 	
  	int minlist = asize / 50;
  	if(minlist > 83)
  		minlist = 83; 
+ 	if(minlist < global_minlist)
+ 		minlist = global_minlist;
  	for(; minlist < 84; minlist++){
-		for (bp = (char *)GET(heap_listp + (minlist * WSIZE)); (int)bp != 0 && GET_SIZE(HDRP(bp)) > 0; bp = (char *)GET(bp+WSIZE)) {
+ 		int i = 0;
+		for (bp = (char *)GET(heap_listp + (minlist * WSIZE)); (int)bp != 0 && GET_SIZE(HDRP(bp)) > 0 && i < 250; bp = (char *)GET(bp+WSIZE)) {
 			if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
 				return bp;
 			}
+			i++;
 		}
  	}
  	return NULL; /* No fit */
@@ -232,14 +247,24 @@ void *mm_malloc(size_t size)
  {	
  	int minlist; 
  	int size;
+ 	free_count--; 
  	
  	size = GET_SIZE(HDRP(bp));
  	
  	minlist = size / 50;
  	if(minlist > 83)
  		minlist = 83; 
-	if(GET(bp) == 0 && GET(bp + WSIZE) == 0) // if the prev free pointer and next free pointer were 0 set global first free pointer to 0.
- 		PUT(heap_listp+(minlist * WSIZE), 0); 	
+	if(GET(bp) == 0 && GET(bp + WSIZE) == 0) { // if the prev free pointer and next free pointer were 0 set global first free pointer to 0.
+ 		PUT(heap_listp+(minlist * WSIZE), 0);
+ 		if(global_minlist == minlist) { //if this list was the global min list update global minlist.
+ 			if(free_count > 0){
+ 			int i;
+ 			for (i = minlist; GET(heap_listp+(i * WSIZE)) == 0; i++);
+ 			global_minlist = i;
+ 			}
+			else(global_minlist = 100); 			
+ 		}
+ 	}
  	else if (GET(bp) == 0 && GET(bp + WSIZE) != 0){// else if the prev pointer was 0 and next not zero make global first free pointer next.
  		PUT(heap_listp+(minlist * WSIZE), GET(bp + WSIZE));
  		PUT((char *)GET(bp + WSIZE), 0);
@@ -256,21 +281,41 @@ void *mm_malloc(size_t size)
  {	 
  	int minlist;
  	void *temp_next;
+ 	void *temp_cur;
+ 	void *temp_prev;
  	int size;
+ 	
+ 	free_count++;
  	
  	size = GET_SIZE(HDRP(bp));
  	minlist = size / 50;
 	if(minlist > 83)
-		minlist = 83; 
-	temp_next = (char *)GET(heap_listp + (minlist * WSIZE)); // get global next. 
-	PUT(heap_listp + (minlist * WSIZE), (int)bp); //set global first free block to this block.
+		minlist = 83;
+	if(global_minlist > minlist || global_minlist == 100)
+		global_minlist = minlist; //update global min list
+	temp_cur = (char *)GET(heap_listp + (minlist * WSIZE));
+	if(temp_cur == 0){
+		PUT(heap_listp + (minlist * WSIZE), (int)bp);	
+		PUT(bp, 0); 
+		PUT(bp+WSIZE, 0);
+	}
+	else {
+		temp_prev = (char *)GET(heap_listp + (minlist * WSIZE));
+		for (; (int)temp_cur != 0 && GET_SIZE(HDRP(temp_cur)) < size; temp_cur = (char *)GET(temp_cur+WSIZE))
+			temp_prev = temp_cur;
 
-	if((int)temp_next != 0) // if the old global next was not 0, update the old global next's previous free block pointer to this block.
+		temp_cur = temp_prev;
+		temp_next = (char *)GET(temp_cur + WSIZE); // get global next. 
+		PUT(temp_cur + WSIZE, (int)bp); //set global first free block to this block.
+
+		if((int)temp_next != 0) // if the old global next was not 0, update the old global next's previous free block pointer to this block.
 		PUT(temp_next, (int)bp);
 
-	PUT(bp, 0); 
-	PUT(bp+WSIZE, (int)temp_next);
- }
+		PUT(bp, (int)temp_cur); 
+		PUT(bp+WSIZE, (int)temp_next);
+		}
+}
+ 
 
 ////////////////////////////////////////////////////////////////////
 
@@ -286,9 +331,6 @@ void mm_free(void *bp)
 	PUT(HDRP(bp), PACK(size, 0));
 	PUT(FTRP(bp), PACK(size, 0));
 
-	//add bp to free list
-	add_free_list(bp);
-
 	coalesce(bp);
 }
 ////////////////////////////////////////////////////////////////
@@ -298,13 +340,15 @@ void mm_free(void *bp)
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
 	size_t size = GET_SIZE(HDRP(bp));
 
-	if (prev_alloc && next_alloc) { /* Case 1 */
+	if (prev_alloc && next_alloc) { // Case 1 
+		//ADD BP TO THE FREE LIST
+		add_free_list(bp);
+		
 		return bp;
 	}
-	else if (prev_alloc && !next_alloc) { /* Case 2 */
 
- 		//REMOVE BP FROM FREE LIST
- 		remove_free_list(bp);
+	else if (prev_alloc && !next_alloc) { // Case 2 
+
  		//REMOVE NEXT FROM FREE LIST
  		remove_free_list(NEXT_BLKP(bp));
 
@@ -314,39 +358,41 @@ void mm_free(void *bp)
 
 		//ADD BP TO THE FREE LIST
 		add_free_list(bp);
-	}
-	else if (!prev_alloc && next_alloc) { /* Case 3 */
 
-		//REMOVE BP FROM FREE LIST
- 		remove_free_list(bp);
+
+	}
+
+	else if (!prev_alloc && next_alloc) { // Case 3 
+
  		//REMOVE PREV FROM FREE LIST
  		remove_free_list(PREV_BLKP(bp));
 
 		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-		PUT(FTRP(bp), PACK(size, 0));
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+		PUT(FTRP(PREV_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
 
 		//ADD TO THE FREE LIST
 		add_free_list(bp);
+
 	}
 
-	else { /* Case 4 */		
-		//REMOVE BP FROM FREE LIST
- 		remove_free_list(bp);
+	else { // Case 4 
+
  		//REMOVE PREV FROM FREE LIST
  		remove_free_list(PREV_BLKP(bp));
  		//REMOVE NEXT FROM FREE LIST
  		remove_free_list(NEXT_BLKP(bp));
-		
+
 		size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
 		GET_SIZE(FTRP(NEXT_BLKP(bp)));
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+		PUT(FTRP(PREV_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
-		
+
 		//ADD TO THE FREE LIST
-		add_free_list(bp);		
+		add_free_list(bp);
+
 	}
 	return bp;
  }
@@ -356,29 +402,153 @@ void mm_free(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    //mm_check();	
     void *oldptr = ptr;
     void *newptr;
+    void *temp;
+    size_t tempsize;
     size_t copySize;
     
-    newptr = mm_malloc(size);
-    if (newptr == NULL)	
-      return NULL;
-    if (oldptr == NULL)	//if ptr is NULL, the call is equivalent to mm malloc(size)
-	return newptr;
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(oldptr)));
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(oldptr)));
+    size_t size_prev = GET_SIZE(HDRP(oldptr));
+    int increase;
+    if(size_prev  < size + DSIZE) 
+    	    increase = 1;
+    else
+    	    increase = 0;
+    
+    
     if (size == 0){	//if size is equal to zero, the call is equivalent to mm free(ptr)
 	mm_free(ptr);
     	newptr = 0;
+    	return NULL;
     }
-    copySize = GET_SIZE(HDRP(ptr));
-    //copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
-}
+    if (oldptr == NULL)	//if ptr is NULL, the call is equivalent to mm malloc(size)
+	return mm_malloc(size);    
+    if(increase == 0 && (size_prev - size - DSIZE) > (2*DSIZE)){ // if shrinking ptr and released space will be large enough to be a block
+    	if (size <= DSIZE)
+    	    	size = 2*DSIZE;
+    	 else
+	  	size =  DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); // align size
+	if((size_prev - size) > (2*DSIZE)){
 
+	 assert ( size <= size_prev);
+    	 PUT(HDRP(oldptr), PACK(size, 1)); // resize old 
+	 PUT(FTRP(oldptr), PACK(size, 1)); // resize old
+	 newptr = oldptr; // set new ptr to old ptr
+	 oldptr =  (NEXT_BLKP(newptr)); // reset old pointer to the new (empty) block
+	 PUT(HDRP(oldptr), PACK(size_prev - size, 0));
+	 PUT(FTRP(oldptr), PACK(size_prev - size, 0));
+	 assert(GET_SIZE(HDRP(newptr)) +GET_SIZE(HDRP(oldptr)) == size_prev);  
+	//add oldptr to free list
+	add_free_list(oldptr);
+	//coalesce
+	coalesce(oldptr);
+	return oldptr;
+	}
+    }
+    if(increase == 0) {//if shrinking ptr and released space to small to be a block or size is the same return same ptr
+    	    return ptr;
+    }
+    else { // size is greater than before
+    	    //if next is unallocated and combining next with this block would fufill new size requirement merge the blocks
+    	    if(next_alloc == 0 && ((GET_SIZE(HDRP(NEXT_BLKP(oldptr)))) + size_prev) >= (size + DSIZE)){
+    	    	    temp = NEXT_BLKP(oldptr);
+    	    	    tempsize = GET_SIZE(FTRP(temp));
+    	    	    //remove next block from the free list
+    	    	    remove_free_list(NEXT_BLKP(ptr));
+    	    	    if (size <= DSIZE)
+    	    	    	size = 2*DSIZE;
+		    else
+		    	size =  DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); // align size
+    	    	    if((tempsize + size_prev) < (size + 2*DSIZE)) // if not big enough for new free block make new block take all space
+    	    	    	 size = tempsize + size_prev;
+	    	    assert(tempsize + size_prev >= size);
+    	    	    PUT(HDRP(oldptr), PACK(size, 1)); // resize old 
+    	    	    PUT(FTRP(oldptr), PACK(size, 1)); // resize old 
+    	    	    assert(GET_SIZE(HDRP(oldptr)) == size);
+    	    	    
+    	    	    if((tempsize + size_prev) >= (size + 2*DSIZE)){ //if new free block initialize it
+			    newptr = NEXT_BLKP(oldptr); // set new pointer to the new (empty) block
+			    PUT(HDRP(newptr), PACK(tempsize + size_prev - size, 0));
+			    PUT(FTRP(newptr), PACK(tempsize + size_prev - size, 0));
+			    //add newptr to free list
+			    add_free_list(newptr);
+    	    	    }
+    	    	    //assert(GET_SIZE(HDRP(oldptr)) + GET_SIZE(HDRP(newptr)) == tempsize + size_prev);
+    	    	    return oldptr;    	    	    
+    	    }    	
+    	    //if prev is unallocated and combining prev with this block would fufill new size requirement merge the blocks
+    	    else if(prev_alloc == 0 && ((GET_SIZE(HDRP(PREV_BLKP(oldptr)))) + size_prev) >= (size + DSIZE)){ 
+    	    	    newptr = PREV_BLKP(oldptr);
+    	    	    tempsize = GET_SIZE(FTRP(newptr));
+    	    	    //remove next block from the free list
+    	    	    remove_free_list(PREV_BLKP(oldptr));
+    	    	    if (size <= DSIZE)
+    	    	    	size = 2*DSIZE;
+		    else
+		    	size =  DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); // align size
+    	    	    if((tempsize + size_prev) < (size + 2*DSIZE)) // if not big enough for new free block make new block take all space
+    	    	    	 size = tempsize + size_prev;
+	    	    assert(tempsize + size_prev >= size);
+    	    	    PUT(HDRP(newptr), PACK(size, 1)); // resize old
+    	    	    copySize = GET_SIZE(HDRP(oldptr));
+    	    	    memcpy(newptr, oldptr, copySize);
+    	    	    PUT(FTRP(newptr), PACK(size, 1)); // resize old 
+    	    	    assert(GET_SIZE(HDRP(newptr)) == size);
+    	    	    
+    	    	    if((tempsize + size_prev) >= (size + 2*DSIZE)){ //if new free block initialize it
+			    temp = NEXT_BLKP(newptr); // set new pointer to the new (empty) block
+			    PUT(HDRP(temp), PACK(tempsize + size_prev - size, 0));
+			    PUT(FTRP(temp), PACK(tempsize + size_prev - size, 0));
+			    //add newptr to free list
+			    add_free_list(temp);
+    	    	    }
+    	    	    //assert(GET_SIZE(HDRP(oldptr)) + GET_SIZE(HDRP(newptr)) == tempsize + size_prev);
+    	    	    return newptr;    	
+    	    }
+    	    //if next and prev are unallocated and combining the three blocks would fufill new size requirement merge blocks.
+    	    else if (next_alloc == 0 && prev_alloc == 0 && ((GET_SIZE(HDRP(PREV_BLKP(oldptr)))) + (GET_SIZE(HDRP(NEXT_BLKP(oldptr)))) + size_prev) >= (size + DSIZE)){
+    	   	    newptr = PREV_BLKP(oldptr);
+    	   	    temp = NEXT_BLKP(oldptr);
+    	    	    tempsize = GET_SIZE(FTRP(newptr)) + GET_SIZE(FTRP(temp));
+    	    	    //remove next block from the free list
+    	    	    remove_free_list(PREV_BLKP(oldptr));
+    	    	    remove_free_list(NEXT_BLKP(oldptr));
+    	    	    if (size <= DSIZE)
+    	    	    	size = 2*DSIZE;
+		    else
+		    	size =  DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE); // align size
+    	    	    if((tempsize + size_prev) < (size + 2*DSIZE)) // if not big enough for new free block make new block take all space
+    	    	    	 size = tempsize + size_prev;
+	    	    assert(tempsize + size_prev >= size);
+    	    	    PUT(HDRP(newptr), PACK(size, 1)); // resize old
+    	    	    copySize = GET_SIZE(HDRP(oldptr));
+    	    	    memcpy(newptr, oldptr, copySize);
+    	    	    PUT(FTRP(newptr), PACK(size, 1)); // resize old 
+    	    	    assert(GET_SIZE(HDRP(newptr)) == size);
+    	    	    
+    	    	    if((tempsize + size_prev) >= (size + 2*DSIZE)){ //if new free block initialize it
+			    temp = NEXT_BLKP(newptr); // set new pointer to the new (empty) block
+			    PUT(HDRP(temp), PACK(tempsize + size_prev - size, 0));
+			    PUT(FTRP(temp), PACK(tempsize + size_prev - size, 0));
+			    //add newptr to free list
+			    add_free_list(temp);
+    	    	    }
+    	    	    //assert(GET_SIZE(HDRP(oldptr)) + GET_SIZE(HDRP(newptr)) == tempsize + size_prev);
+    	    	    return newptr;    	   	    	    
+    	    }
+    	    // if next and previous blocks are allocated
+    	    newptr = mm_malloc(size);
+    	    copySize = GET_SIZE(HDRP(oldptr));
+	    if (size < copySize)
+		    copySize = size;
+	    //copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+	    memcpy(newptr, oldptr, copySize);
+	    mm_free(oldptr);
+	    return newptr;
+    }
+}
 /////////////////////////////////////////////////////////////////////////////////////////////
 /*
  *  Your heap checker will consist of the function int mm check(void) in mm.c. It will check any invariants
