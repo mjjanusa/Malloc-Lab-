@@ -2,10 +2,10 @@
 # Students' Makefile for the Malloc Lab
 #
 TURNIN := /lusr/bin/turnin
-GRADER := TBD-FIXME
+GRADER := ctlight
 LAB_NAME := handin-439-malloclab
 
-CC = gcc -g
+CC = gcc
 CFLAGS = -Wall -O2 -m32
 
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
