@@ -104,7 +104,6 @@ static int mm_check(void);
  */
 int mm_init(void)
 {
-	//char *bp;
 	/* Create the initial empty heap */
 	if ((heap_listp = mem_sbrk(88*WSIZE)) == (void *)-1)//create block for prologue and epilogue header. 
 		return -1;
@@ -150,14 +149,16 @@ int mm_init(void)
 	PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */
 
 	/* Coalesce to combine neighboring free blocks if possible */
-	return coalesce(bp);
-	//return bp;
+	//return coalesce(bp);
+	bp = coalesce(bp);
+	//mm_check();
+	return bp;
  }
  
  
 /* 
- * mm_malloc - Allocate a block by finding a large enough block on the free list (extending heap if needed) and placing it in the free block.   
- *     Always allocate a block whose size is a multiple of the alignment.
+ *   mm_malloc - Allocate a block by finding a large enough block on the free list (extending heap if needed) and placing it in the free block.   
+ *   Always allocate a block whose size is a multiple of the alignment.
  */
 void *mm_malloc(size_t size)
 {
@@ -195,7 +196,7 @@ void *mm_malloc(size_t size)
 
 
 /* 
- * find_fit - search free list for large enough block to place malloc request.  Return null if no fit fount.  
+ *      find_fit - search free list for large enough block to place malloc request.  Return null if no fit fount.  
  *  	find_fit starts search at the minimum free list that a large enough block could be on.  
  *	virtual best fit search due to free list organization.
  */
@@ -236,7 +237,7 @@ void *mm_malloc(size_t size)
  }
  
 /* 
- * place - place a block of given size in a block of given pointer.    
+ *      place - place a block of given size in a block of given pointer.    
  *  	splits given block if the block is large enough for allocated space and new free block  
  *	removes block from the free list. 
  */ 
@@ -279,7 +280,7 @@ void *mm_malloc(size_t size)
  
 
 /* 
- * remove_free_list - removes a given pointer from the free list.     
+ *      remove_free_list - removes a given pointer from the free list.     
  *  	updates free count and global_min_list if necessary  
  */  
  static void remove_free_list(void *bp)
@@ -346,7 +347,7 @@ void *mm_malloc(size_t size)
  
  
  /* 
- * add_free_list - adds a given pointer to the free list.       
+ *      add_free_list - adds a given pointer to the free list.       
  *  	updates free count and global_min_list if necessary  
  */  
  static void add_free_list(void *bp)
@@ -419,10 +420,11 @@ void *mm_malloc(size_t size)
 
 
 /*
- * mm_free - Frees block pointed to by given pointer.
+ *     mm_free - Frees block pointed to by given pointer.
  */
 void mm_free(void *bp)
 {
+	//mm_check();
 	//calculate size of block to be freed.
 	size_t size = GET_SIZE(HDRP(bp));
 
@@ -435,7 +437,7 @@ void mm_free(void *bp)
 }
 
  /* 
- * coalesce - combines newly created free block with neighboring free blocks if possible       
+ *      coalesce - combines newly created free block with neighboring free blocks if possible       
  *  	adds given block to the free list. 
  */  
  static void *coalesce(void *bp)
@@ -523,7 +525,7 @@ void mm_free(void *bp)
  }
 
 /*
- * mm_realloc - resize a given block to a given size and return pointer to the new resize block.  
+ *    mm_realloc - resize a given block to a given size and return pointer to the new resize block.  
  */
 void *mm_realloc(void *ptr, size_t size)
 {
@@ -774,19 +776,38 @@ void *mm_realloc(void *ptr, size_t size)
  */
  static int mm_check(void)
  {
-	//char *tempPtr;
+	//size_t* helpR;
 	void* tempPtr;
 	size_t* topHeap =  mem_heap_lo();	//Get top of heap from mdriver.c
     	size_t* bottomHeap =  mem_heap_hi();	//And get footer of heap
+	
+	//First, make sure bottomHeap is set right.
+	assert(bottomHeap == mem_heap_hi());
+//	printf("Top of heap: %p\n Bottom of heap: %p\n", topHeap, bottomHeap);
+
+	// Then, check to ensure that we have no data past mem_heapsize. 
+	assert(bottomHeap < (topHeap + mem_heapsize()));
+	
+	/* Next, make sure we haven't written past mem_heap_hi(). */
+//	helpR = bottomHeap + 1;
+//	while (helpR < (topHeap + mem_heapsize())) {
+//		assert((*helpR) == 0);
+//		helpR++;
+//	}
 
   	//While there is a next pointer, go through the heap
 	for(tempPtr = topHeap; GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
 	//for(tempPtr = GET_BP(heap_listp); GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
         	
+		if (tempPtr > topHeap){
+            		printf("ERROR: Top of heap exceeded by pointer\n top: %p,\n pointer: %p\n", topHeap, tempPtr);
+        	}
 		//If pointer is beyond bounds print error
         	if (tempPtr > bottomHeap || tempPtr < topHeap){	
             		printf("Error: pointer %p out of heap bounds\n", tempPtr);
 		}
+
+		
 
 		//if the size and allocated fields read from address p are "0" print error 
 		//(contiguous free block issue)
@@ -796,32 +817,26 @@ void *mm_realloc(void *ptr, size_t size)
 		/* header/footer consistency */
 		if (GET(HDRP(tempPtr)) != GET(FTRP(tempPtr))){
         		//printf("Error, %p head and bottom of block not consistent\n", tempPtr);
-			printf("Block %x: Header %d, Footer %d\n", (size_t)tempPtr, GET(HDRP(tempPtr)), GET(FTRP(tempPtr)));
+//			printf("Header/footer mismatch:\n");
+//			printf("Block %x: Header %d, Footer %d\n", (size_t)tempPtr, GET(HDRP(tempPtr)), GET(FTRP(tempPtr)));
     		}
 		if ((size_t)tempPtr%8){
         		printf("Error, %p misaligned our headers and payload\n", tempPtr);
     		}
 	}
+
+	// Then, make sure the blocks in our free lists are actually free. 
+//	int i;
+//	for (i = 0; i < free_count; i++) {
+//		tempPtr = (char *)GET(heap_listp + (i * WSIZE));
+//		while (tempPtr != NULL) {
+//			assert(!GET_ALLOC(tempPtr));
+//			//assert(GET_SIZE(tempPtr) < MAX_BLOCK_ALLOCSIZE);
+//			tempPtr = (HDRP(NEXT_BLKP(tempPtr)));
+//		}
+//	}
 	return 0;
 
-/*
-    void* current;
-    void* previous;
-    int i;
-    int safety_counter = 0;
- 
-    // header/footer consistency 
-    current = GET_BP(heap_listp);
-    do {
-        if (GET(HDRP(current)) != GET(FTRP(current))) {
-            printf("Header/footer mismatch:\n");
-            printf("Block %x: Header %d, Footer %d\n", (size_t)current, GET(HDRP(current)), GET(FTRP(current)));
-            return 0;
-        }
-        current = NEXT_BLKP(current);
-    } while (GET_SIZE(HDRP(current)) > 0);
 
- 
-    return 1;*/
  }
 //////////////////////////////////////////////////////////////////////////////////////////////
