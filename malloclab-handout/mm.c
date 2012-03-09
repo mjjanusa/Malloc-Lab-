@@ -60,7 +60,7 @@ static void add_free_list(void *bp);
 static void remove_free_list(void *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
-static int mm_check(void);
+//static int mm_check(void);
 
 ///////////////////////////////////////////////////////////////
 
@@ -767,6 +767,8 @@ void *mm_realloc(void *ptr, size_t size)
 	    return newptr;
     }
 }
+
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 /*
  *  Your heap checker will consist of the function int mm check(void) in mm.c. It will check any invariants
@@ -774,7 +776,7 @@ void *mm_realloc(void *ptr, size_t size)
  *  consistent. You are not limited to the listed suggestions nor are you required to check all of them. You are
  *  encouraged to print out error messages when mm check fails. 
  */
- static int mm_check(void)
+/* static int mm_check(void)
  {
 	//size_t* helpR;
 	void* tempPtr;
@@ -783,27 +785,20 @@ void *mm_realloc(void *ptr, size_t size)
 	
 	//First, make sure bottomHeap is set right.
 	assert(bottomHeap == mem_heap_hi());
-//	printf("Top of heap: %p\n Bottom of heap: %p\n", topHeap, bottomHeap);
+	//printf("Top of heap: %p\n Bottom of heap: %p\n", topHeap, bottomHeap);
 
 	// Then, check to ensure that we have no data past mem_heapsize. 
 	assert(bottomHeap < (topHeap + mem_heapsize()));
 	
-	/* Next, make sure we haven't written past mem_heap_hi(). */
-//	helpR = bottomHeap + 1;
-//	while (helpR < (topHeap + mem_heapsize())) {
-//		assert((*helpR) == 0);
-//		helpR++;
-//	}
-
   	//While there is a next pointer, go through the heap
 	for(tempPtr = topHeap; GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
 	//for(tempPtr = GET_BP(heap_listp); GET_SIZE(HDRP(tempPtr)) > 0; tempPtr = NEXT_BLKP(tempPtr)) {
         	
-		if (tempPtr > topHeap){
+		if ((int)tempPtr > (int)topHeap){
             		printf("ERROR: Top of heap exceeded by pointer\n top: %p,\n pointer: %p\n", topHeap, tempPtr);
         	}
 		//If pointer is beyond bounds print error
-        	if (tempPtr > bottomHeap || tempPtr < topHeap){	
+        	if ((int)tempPtr > (int)bottomHeap || (int)tempPtr < (int)topHeap){	
             		printf("Error: pointer %p out of heap bounds\n", tempPtr);
 		}
 
@@ -811,32 +806,26 @@ void *mm_realloc(void *ptr, size_t size)
 
 		//if the size and allocated fields read from address p are "0" print error 
 		//(contiguous free block issue)
-        	if (GET_ALLOC(tempPtr) == 0 && GET_ALLOC(NEXT_BLKP(tempPtr))==0){
+        	if (GET_ALLOC(HDRP(tempPtr)) == 0 && GET_ALLOC(HDRP(NEXT_BLKP(tempPtr)))==0){
             		printf("Error: Empty stacked blocks %p and %p not coalesced\n", tempPtr, NEXT_BLKP(tempPtr));
 		}
-		/* header/footer consistency */
-		if (GET(HDRP(tempPtr)) != GET(FTRP(tempPtr))){
-        		//printf("Error, %p head and bottom of block not consistent\n", tempPtr);
-//			printf("Header/footer mismatch:\n");
-//			printf("Block %x: Header %d, Footer %d\n", (size_t)tempPtr, GET(HDRP(tempPtr)), GET(FTRP(tempPtr)));
-    		}
 		if ((size_t)tempPtr%8){
         		printf("Error, %p misaligned our headers and payload\n", tempPtr);
     		}
 	}
 
 	// Then, make sure the blocks in our free lists are actually free. 
-//	int i;
-//	for (i = 0; i < free_count; i++) {
-//		tempPtr = (char *)GET(heap_listp + (i * WSIZE));
-//		while (tempPtr != NULL) {
-//			assert(!GET_ALLOC(tempPtr));
-//			//assert(GET_SIZE(tempPtr) < MAX_BLOCK_ALLOCSIZE);
-//			tempPtr = (HDRP(NEXT_BLKP(tempPtr)));
-//		}
-//	}
+	int i;
+	for (i = 0; i < 83; i++) {
+		tempPtr = (char *)GET(heap_listp + (i * WSIZE));
+		while (tempPtr != NULL) {
+			assert(!GET_ALLOC(tempPtr));
+			//assert(GET_SIZE(tempPtr) < MAX_BLOCK_ALLOCSIZE);
+			tempPtr = (char *)GET(tempPtr);
+		}
+	}
 	return 0;
 
 
- }
+ }*/
 //////////////////////////////////////////////////////////////////////////////////////////////
